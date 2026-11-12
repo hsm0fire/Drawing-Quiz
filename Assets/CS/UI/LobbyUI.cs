@@ -24,7 +24,7 @@ public class LobbyUI : NetworkBehaviour
     [SerializeField] private Button leaveRoomBtn;
 
     [Header("Settings")]
-    [SerializeField] private string gameSceneName = "DrawAndGuess";
+    [SerializeField] private string gameSelectionSceneName = "GameSelection";
     [SerializeField] private string mainMenuSceneName = "MainMenu";
 
     // أسماء اللاعبين المتزامنة في الردهة
@@ -191,15 +191,43 @@ private void OnClientDisconnected(ulong clientId)
         }
     }
 
-    private void OnStartGameClicked()
+    
+private void OnStartGameClicked()
+{
+    // المضيف فقط يستطيع بدء عملية إعادة اللعب
+    if (!IsServer) return;
+
+    if (NetworkManager.Singleton == null)
     {
-        if (!IsServer) return;
-
-        // تشغيل صوت النقر
-        if (SoundEffectsManager.Instance != null) SoundEffectsManager.Instance.PlayButtonClick();
-
-        NetworkManager.Singleton.SceneManager.LoadScene(gameSceneName, UnityEngine.SceneManagement.LoadSceneMode.Single);
+        Debug.LogError("[LobbyUI] NetworkManager not found!");
+        return;
     }
+
+    // التأكد من وجود لاعبين متصلين
+    if (NetworkManager.Singleton.ConnectedClientsIds.Count != 2)
+    {
+        Debug.LogWarning("[LobbyUI] Exactly two players are required to continue.");
+        return;
+    }
+
+    // التأكد من أن مشهد الاختيار موجود في Build Settings
+    if (!Application.CanStreamedLevelBeLoaded(gameSelectionSceneName))
+    {
+        Debug.LogError($"[LobbyUI] Scene '{gameSelectionSceneName}' is missing from Build Settings!");
+        return;
+    }
+
+    if (SoundEffectsManager.Instance != null)
+        SoundEffectsManager.Instance.PlayButtonClick();
+
+    Debug.Log("[LobbyUI] Returning both players to GameSelection...");
+
+    NetworkManager.Singleton.SceneManager.LoadScene(
+        gameSelectionSceneName,
+        UnityEngine.SceneManagement.LoadSceneMode.Single
+    );
+}
+
 
     /// <summary>
     /// مغادرة الغرفة وإيقاف الاتصال والعودة للقائمة الرئيسية
