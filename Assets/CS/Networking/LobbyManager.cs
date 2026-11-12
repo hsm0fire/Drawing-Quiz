@@ -1,3 +1,4 @@
+
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -5,16 +6,24 @@ using UnityEngine.SceneManagement;
 public class LobbyManager : MonoBehaviour
 {
     [Header("Configuration")]
-    [SerializeField] private string gameSceneName = "GameLobby";
+    [SerializeField] private string gameSceneName = "GameSelection";
     [SerializeField] private int requiredPlayers = 2;
+
+    private bool isLoadingScene = false;
 
     private void Start()
     {
-        // الاشتراك في أحداث دخول وخروج اللاعبين عبر الشبكة
-        if (NetworkManager.Singleton != null)
+        if (NetworkManager.Singleton == null)
         {
-            NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
+            Debug.LogError("[LobbyManager] NetworkManager not found!");
+            return;
         }
+
+        NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
+
+        // فحص العدد عند بدء السكربت
+        CheckPlayerCount();
     }
 
     private void OnDestroy()
@@ -22,23 +31,57 @@ public class LobbyManager : MonoBehaviour
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
+            NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
         }
     }
 
     private void HandleClientConnected(ulong clientId)
     {
-        // فقط المضيف (Host/Server) هو المخول بإصدار أمر تحميل المشهد للجميع
-        if (!NetworkManager.Singleton.IsServer) return;
+        if (!NetworkManager.Singleton.IsServer)
+            return;
 
-        Debug.Log($"[LobbyManager] Player connected! Total players: {NetworkManager.Singleton.ConnectedClientsIds.Count}");
+        Debug.Log(
+            $"[LobbyManager] Player connected: {clientId}. " +
+            $"Total players: {NetworkManager.Singleton.ConnectedClientsIds.Count}"
+        );
 
-        // عند اكتمال عدد اللاعبين المطلوب (2 لاعبين)
-        if (NetworkManager.Singleton.ConnectedClientsIds.Count >= requiredPlayers)
+        CheckPlayerCount();
+    }
+
+    private void HandleClientDisconnected(ulong clientId)
+    {
+        if (!NetworkManager.Singleton.IsServer)
+            return;
+
+        Debug.Log($"[LobbyManager] Player disconnected: {clientId}");
+
+        if (NetworkManager.Singleton.ConnectedClientsIds.Count < requiredPlayers)
         {
-            Debug.Log("[LobbyManager] Both players connected! Loading next scene...");
-            
-            // تحميل المشهد المتزامن لجميع المتصلين تلقائياً
-            NetworkManager.Singleton.SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
+            isLoadingScene = false;
+        }
+    }
+
+    private void CheckPlayerCount()
+    {
+        if (NetworkManager.Singleton == null ||
+            !NetworkManager.Singleton.IsServer ||
+            isLoadingScene)
+        {
+            return;
+        }
+
+        int playerCount = NetworkManager.Singleton.ConnectedClientsIds.Count;
+
+        if (playerCount >= requiredPlayers)
+        {
+            isLoadingScene = true;
+
+            Debug.Log("[LobbyManager] Two players connected. Loading GameSelection...");
+
+            NetworkManager.Singleton.SceneManager.LoadScene(
+                gameSceneName,
+                LoadSceneMode.Single
+            );
         }
     }
 }
