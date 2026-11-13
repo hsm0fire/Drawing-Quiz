@@ -21,5 +21,7 @@ EditorBuildSettings:
     path: Assets/Scenes/QuestionChallenge.unity
     guid: ac958e1e19b2e554e935edcedd3a5dcd
   m_configObjects:
+    com.unity.addressableassets: {fileID: 11400000, guid: 8f64dce0e8d9c9f4e8fe589d45830cea, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 3590b91b4603b465dbb4216d601bff33, type: 3}
+    com.unity.localization.settings: {fileID: 11400000, guid: 6ea74a3691634ba4a9d6f319cc588d28, type: 2}
   m_UseUCBPForAssetBundles: 0
