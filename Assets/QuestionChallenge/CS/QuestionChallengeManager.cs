@@ -348,9 +348,9 @@ private readonly NetworkVariable<FixedString64Bytes> guestPlayerName =
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-private void SubmitAnswerServerRpc(
-    int answerIndex,
-    RpcParams rpcParams = default)
+    private void SubmitAnswerServerRpc(
+        int answerIndex,
+        RpcParams rpcParams = default)
     {
         if (!roundActive.Value || gameFinished.Value)
             return;
