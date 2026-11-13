@@ -20,6 +20,11 @@ public class GameSelectionManager : NetworkBehaviour
     [Header("Scene Settings")]
     [SerializeField] private string gameLobbySceneName = "GameLobby";
 
+    public static GameSelectionManager Instance { get; private set; }
+
+    public static string LastHostName = "اللاعب الأول";
+public static string LastGuestName = "اللاعب الثاني";
+
 
 // أسماء اللاعبين المتزامنة بين المضيف والضيف
 private NetworkVariable<FixedString64Bytes> hostName =
@@ -67,6 +72,8 @@ public NetworkVariable<FixedString64Bytes> GuestNameVariable => guestName;
 
     public override void OnNetworkSpawn()
 {
+
+    Instance = this;
     if (IsServer)
     {
         NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
@@ -124,6 +131,8 @@ private string GetSafePlayerName(string playerName)
 
     public override void OnNetworkDespawn()
     {
+        if (Instance == this)
+    Instance = null;
         if (IsServer && NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
@@ -222,7 +231,14 @@ private string GetSafePlayerName(string playerName)
 
         selectionState.Value = StateLoadingGame;
 
-        Debug.Log($"[GameSelectionManager] Guest accepted. Loading: {sceneName}");
+// حفظ أسماء اللاعبين قبل الانتقال إلى المشهد الجديد
+LastHostName = hostName.Value.ToString();
+LastGuestName = guestName.Value.ToString();
+
+Debug.Log($"[GameSelectionManager] Host: {LastHostName}");
+Debug.Log($"[GameSelectionManager] Guest: {LastGuestName}");
+
+Debug.Log($"[GameSelectionManager] Guest accepted. Loading: {sceneName}");
 
         // الخادم وحده يحمل المشهد لجميع اللاعبين
         NetworkManager.Singleton.SceneManager.LoadScene(
@@ -240,10 +256,9 @@ private string GetSafePlayerName(string playerName)
                 sceneName = "DrawAndGuess";
                 return true;
 
-            // نضيف المشاهد الأخرى هنا عندما تصبح جاهزة
-            // case CodeBreakerGameId:
-            //     sceneName = "CodeBreaker";
-            //     return true;
+            case QuestionChallengeGameId:
+                sceneName = "QuestionChallenge";
+                return true;
 
             // case ReactionTestGameId:
             //     sceneName = "ReactionTest";

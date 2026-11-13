@@ -46,7 +46,10 @@ public class GameSelectionUI : MonoBehaviour
     {
         // الألعاب التي لم يتم تطويرها بعد
         if (QuestionChallengeButton != null)
-            QuestionChallengeButton.interactable = false;
+{
+    QuestionChallengeButton.interactable = true;
+    QuestionChallengeButton.onClick.AddListener(OnQuestionChallengeClicked);
+}
 
         if (reactionTestButton != null)
             reactionTestButton.interactable = false;
@@ -138,6 +141,9 @@ private void OnGuestNameChanged(
     selectionManager.HostNameVariable.OnValueChanged -= OnHostNameChanged;
     selectionManager.GuestNameVariable.OnValueChanged -= OnGuestNameChanged;
 }
+
+if (QuestionChallengeButton != null)
+    QuestionChallengeButton.onClick.RemoveListener(OnQuestionChallengeClicked);
     }
 
     private void OnSelectionChanged(int oldValue, int newValue)
@@ -338,6 +344,21 @@ private void OnGuestNameChanged(
             GameSelectionManager.DrawAndGuessGameId
         );
     }
+
+    private void OnQuestionChallengeClicked()
+{
+    if (selectionManager == null || !selectionManager.IsSpawned)
+        return;
+
+    if (!selectionManager.IsServer)
+        return;
+
+    PlayClickSound();
+
+    selectionManager.RequestGameSelectionServerRpc(
+        GameSelectionManager.QuestionChallengeGameId
+    );
+}
 
     private void OnAcceptClicked()
     {

@@ -31,8 +31,29 @@ public class QuestionChallengeManager : NetworkBehaviour
 
     [Header("Results UI")]
     [SerializeField] private GameObject resultsPanel;
+    [SerializeField] private TMP_Text hostFinalScoreText;
+    [SerializeField] private TMP_Text guestFinalScoreText;
+    [SerializeField] private TMP_Text winnerText;
+
+    [Header("Scene Settings")]
+    [SerializeField] private string gameLobbySceneName = "GameLobby";
+    [SerializeField] private float resultsDisplayDuration = 5f;
 
     // Shared network data
+
+    private NetworkVariable<FixedString64Bytes> hostPlayerName =
+    new NetworkVariable<FixedString64Bytes>(
+        "اللاعب الأول",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+private NetworkVariable<FixedString64Bytes> guestPlayerName =
+    new NetworkVariable<FixedString64Bytes>(
+        "اللاعب الثاني",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
     private readonly NetworkVariable<int> questionNumber =
         new NetworkVariable<int>(0);
 
@@ -78,6 +99,20 @@ public class QuestionChallengeManager : NetworkBehaviour
     private readonly NetworkVariable<ulong> guestClientId =
         new NetworkVariable<ulong>(ulong.MaxValue);
 
+        private readonly NetworkVariable<FixedString64Bytes> hostPlayerName =
+    new NetworkVariable<FixedString64Bytes>(
+        new FixedString64Bytes("المضيف"),
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+private readonly NetworkVariable<FixedString64Bytes> guestPlayerName =
+    new NetworkVariable<FixedString64Bytes>(
+        new FixedString64Bytes("الضيف"),
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     // Server-only data
     private List<QuestionData> selectedQuestions;
     private int currentCorrectAnswer;
@@ -89,7 +124,7 @@ public class QuestionChallengeManager : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        questionNumber.OnValueChanged += OnNetworkValueChanged;
+        questionNumber.OnValueChanged += OnQuestionNumberChanged;
         syncedQuestion.OnValueChanged += OnQuestionChanged;
 
         syncedAnswerA.OnValueChanged += OnNetworkValueChanged;
@@ -121,7 +156,7 @@ public class QuestionChallengeManager : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        questionNumber.OnValueChanged -= OnNetworkValueChanged;
+        questionNumber.OnValueChanged -= OnQuestionNumberChanged;
         syncedQuestion.OnValueChanged -= OnQuestionChanged;
 
         syncedAnswerA.OnValueChanged -= OnNetworkValueChanged;
@@ -163,6 +198,8 @@ public class QuestionChallengeManager : NetworkBehaviour
 
     private void InitializeGame()
     {
+        hostPlayerName.Value = GameSelectionManager.LastHostName;
+guestPlayerName.Value = GameSelectionManager.LastGuestName;
         if (questionDatabase == null)
         {
             Debug.LogError("Question Database is not assigned!");
@@ -376,23 +413,69 @@ public class QuestionChallengeManager : NetworkBehaviour
         StartRound();
     }
 
-    private void FinishGame()
+    
+
+private void FinishGame()
+{
+    if (!IsServer || gameFinished.Value)
+        return;
+
+    roundActive.Value = false;
+    remainingTime.Value = 0f;
+    gameFinished.Value = true;
+
+    // تسجيل فوز اللاعب في نتائج الجلسة
+    if (hostScore.Value > guestScore.Value)
     {
-        roundActive.Value = false;
-        gameFinished.Value = true;
-
-        if (resultsPanel != null)
-            resultsPanel.SetActive(true);
-
-        if (statusText != null)
-            statusText.text = "انتهى التحدي!";
-        
-        RefreshUI();
-
-        Debug.Log(
-            $"Question Challenge Finished. Host: {hostScore.Value}, Guest: {guestScore.Value}"
-        );
+        SessionScoreManager.AddHostWin();
     }
+    else if (guestScore.Value > hostScore.Value)
+    {
+        SessionScoreManager.AddClientWin();
+    }
+
+    RefreshUI();
+
+    Debug.Log(
+        $"Question Challenge Finished. Host: {hostScore.Value}, Guest: {guestScore.Value}"
+    );
+
+    StartCoroutine(ReturnToGameLobby());
+}
+
+
+private IEnumerator ReturnToGameLobby()
+{
+    yield return new WaitForSeconds(resultsDisplayDuration);
+
+    if (!IsServer || NetworkManager.Singleton == null)
+        yield break;
+
+    if (NetworkManager.Singleton.ConnectedClientsIds.Count != 2)
+    {
+        Debug.LogWarning(
+            "[QuestionChallenge] Cannot return to GameLobby: two players are required."
+        );
+        yield break;
+    }
+
+    if (!Application.CanStreamedLevelBeLoaded(gameLobbySceneName))
+    {
+        Debug.LogError(
+            $"[QuestionChallenge] Scene not found: {gameLobbySceneName}"
+        );
+        yield break;
+    }
+
+    Debug.Log("[QuestionChallenge] Returning players to GameLobby.");
+
+    NetworkManager.Singleton.SceneManager.LoadScene(
+        gameLobbySceneName,
+        UnityEngine.SceneManagement.LoadSceneMode.Single
+    );
+}
+
+
 
     private void OnNetworkValueChanged<T>(T oldValue, T newValue)
     {
@@ -431,10 +514,12 @@ public class QuestionChallengeManager : NetworkBehaviour
             timerText.text = Mathf.CeilToInt(remainingTime.Value).ToString();
 
         if (hostScoreText != null)
-            hostScoreText.text = hostScore.Value.ToString();
+    hostScoreText.text =
+        $"{hostPlayerName.Value} : {hostScore.Value}";
 
-        if (guestScoreText != null)
-            guestScoreText.text = guestScore.Value.ToString();
+if (guestScoreText != null)
+    guestScoreText.text =
+        $"{guestPlayerName.Value} : {guestScore.Value}";
 
         if (answerTexts != null && answerTexts.Length >= 4)
         {
@@ -477,6 +562,33 @@ public class QuestionChallengeManager : NetworkBehaviour
 
         if (resultsPanel != null)
             resultsPanel.SetActive(gameFinished.Value);
+
+
+if (gameFinished.Value)
+{
+    if (hostFinalScoreText != null)
+        hostFinalScoreText.text =
+            $"{hostPlayerName.Value} : {hostScore.Value}";
+
+    if (guestFinalScoreText != null)
+        guestFinalScoreText.text =
+            $"{guestPlayerName.Value} : {guestScore.Value}";
+
+    if (winnerText != null)
+    {
+        if (hostScore.Value > guestScore.Value)
+            winnerText.text =
+                $"الفائز: {hostPlayerName.Value}";
+
+        else if (guestScore.Value > hostScore.Value)
+            winnerText.text =
+                $"الفائز: {guestPlayerName.Value}";
+
+        else
+            winnerText.text = "تعادل!";
+    }
+}
+
     }
 
     private string GetAnswerText(int index)
@@ -490,4 +602,34 @@ public class QuestionChallengeManager : NetworkBehaviour
             default: return "";
         }
     }
+
+    private void OnQuestionNumberChanged(int oldValue, int newValue)
+    {
+        localHasAnswered = false;
+        RefreshUI();
+    }
+
+    private void InitializePlayerNames()
+{
+    if (!IsServer)
+        return;
+
+    string hostName = "المضيف";
+    string guestName = "الضيف";
+
+    if (GameSelectionManager.Instance != null)
+    {
+        hostName = GameSelectionManager.Instance.HostName;
+        guestName = GameSelectionManager.Instance.GuestName;
+    }
+
+    if (string.IsNullOrWhiteSpace(hostName))
+        hostName = "المضيف";
+
+    if (string.IsNullOrWhiteSpace(guestName))
+        guestName = "الضيف";
+
+    hostPlayerName.Value = new FixedString64Bytes(hostName);
+    guestPlayerName.Value = new FixedString64Bytes(guestName);
+}
 }
