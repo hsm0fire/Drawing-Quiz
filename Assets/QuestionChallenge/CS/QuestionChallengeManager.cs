@@ -39,21 +39,7 @@ public class QuestionChallengeManager : NetworkBehaviour
     [SerializeField] private string gameLobbySceneName = "GameLobby";
     [SerializeField] private float resultsDisplayDuration = 5f;
 
-    // Shared network data
-
-    private NetworkVariable<FixedString64Bytes> hostPlayerName =
-    new NetworkVariable<FixedString64Bytes>(
-        "اللاعب الأول",
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
-
-private NetworkVariable<FixedString64Bytes> guestPlayerName =
-    new NetworkVariable<FixedString64Bytes>(
-        "اللاعب الثاني",
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
+    // أسماء اللاعبين متزامنة بين جميع الأجهزة ويكتبها الخادم فقط.
     private readonly NetworkVariable<int> questionNumber =
         new NetworkVariable<int>(0);
 
@@ -135,6 +121,8 @@ private readonly NetworkVariable<FixedString64Bytes> guestPlayerName =
         remainingTime.OnValueChanged += OnTimerChanged;
         hostScore.OnValueChanged += OnNetworkValueChanged;
         guestScore.OnValueChanged += OnNetworkValueChanged;
+        hostPlayerName.OnValueChanged += OnNetworkValueChanged;
+        guestPlayerName.OnValueChanged += OnNetworkValueChanged;
 
         hostAnswered.OnValueChanged += OnNetworkValueChanged;
         guestAnswered.OnValueChanged += OnNetworkValueChanged;
@@ -167,6 +155,8 @@ private readonly NetworkVariable<FixedString64Bytes> guestPlayerName =
         remainingTime.OnValueChanged -= OnTimerChanged;
         hostScore.OnValueChanged -= OnNetworkValueChanged;
         guestScore.OnValueChanged -= OnNetworkValueChanged;
+        hostPlayerName.OnValueChanged -= OnNetworkValueChanged;
+        guestPlayerName.OnValueChanged -= OnNetworkValueChanged;
 
         hostAnswered.OnValueChanged -= OnNetworkValueChanged;
         guestAnswered.OnValueChanged -= OnNetworkValueChanged;
@@ -198,8 +188,18 @@ private readonly NetworkVariable<FixedString64Bytes> guestPlayerName =
 
     private void InitializeGame()
     {
-        hostPlayerName.Value = GameSelectionManager.LastHostName;
-guestPlayerName.Value = GameSelectionManager.LastGuestName;
+        // قراءة الاسمين اللذين أدخلهما اللاعبان في MainMenu ثم مزامنتهما للجميع.
+        string hostName = GameSelectionManager.LastHostName;
+        string guestName = GameSelectionManager.LastGuestName;
+
+        if (string.IsNullOrWhiteSpace(hostName))
+            hostName = "اللاعب الأول";
+
+        if (string.IsNullOrWhiteSpace(guestName))
+            guestName = "اللاعب الثاني";
+
+        hostPlayerName.Value = new FixedString64Bytes(hostName.Trim());
+        guestPlayerName.Value = new FixedString64Bytes(guestName.Trim());
         if (questionDatabase == null)
         {
             Debug.LogError("Question Database is not assigned!");
@@ -609,27 +609,4 @@ if (gameFinished.Value)
         RefreshUI();
     }
 
-    private void InitializePlayerNames()
-{
-    if (!IsServer)
-        return;
-
-    string hostName = "المضيف";
-    string guestName = "الضيف";
-
-    if (GameSelectionManager.Instance != null)
-    {
-        hostName = GameSelectionManager.Instance.HostName;
-        guestName = GameSelectionManager.Instance.GuestName;
-    }
-
-    if (string.IsNullOrWhiteSpace(hostName))
-        hostName = "المضيف";
-
-    if (string.IsNullOrWhiteSpace(guestName))
-        guestName = "الضيف";
-
-    hostPlayerName.Value = new FixedString64Bytes(hostName);
-    guestPlayerName.Value = new FixedString64Bytes(guestName);
-}
 }
