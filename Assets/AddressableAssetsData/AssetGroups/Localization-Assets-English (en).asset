@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Localization-Assets-English (en)
+  m_EditorClassIdentifier: 
+  m_GroupName: Localization-Assets-English (en)
+  m_GUID: 0ff97a38a0e496a4690c5c37dbe9be0a
+  m_SerializeEntries:
+  - m_GUID: 85c37791dc4e968439ef7ac708774076
+    m_Address: Sriracha-Regular SDF
+    m_ReadOnly: 1
+    m_SerializedLabels:
+    - Locale-en
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 1
+  m_Settings: {fileID: 11400000, guid: 011cf617ea177cf43a5e4e6fa4b5dc01, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: eef15dd0417a23e4ab5aecca6d760242, type: 2}
+    - {fileID: 11400000, guid: 4d3770818cce6284aaa567605a29622f, type: 2}
+    - {fileID: 11400000, guid: 1d8197ebe6b903f459f684a591eb5cf5, type: 2}

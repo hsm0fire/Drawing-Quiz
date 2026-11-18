@@ -19,23 +19,31 @@ MonoBehaviour:
     m_Items: []
   m_TableData:
   - m_Id: 86657458176
-    m_Localized: Your Name
+    m_Localized: Write your name
     m_Metadata:
       m_Items: []
   - m_Id: 1593482141696
-    m_Localized: Enter Room Code
+    m_Localized: Enter the room code
     m_Metadata:
       m_Items: []
   - m_Id: 3585478746112
-    m_Localized: EnterCode
+    m_Localized: Enter the code...
     m_Metadata:
       m_Items: []
   - m_Id: 4232940871680
-    m_Localized: Create Room
+    m_Localized: Creating a room
     m_Metadata:
       m_Items: []
   - m_Id: 4470908903424
-    m_Localized: Join Room
+    m_Localized: Join the room
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1899954556624896
+    m_Localized: Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1908660325310464
+    m_Localized: Return
     m_Metadata:
       m_Items: []
   references:

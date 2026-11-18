@@ -35,6 +35,14 @@ MonoBehaviour:
     m_Key: JoinBtn
     m_Metadata:
       m_Items: []
+  - m_Id: 1899954556624896
+    m_Key: Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1908660325310464
+    m_Key: Back
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
