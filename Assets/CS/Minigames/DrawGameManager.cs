@@ -7,6 +7,8 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 
 public class DrawGameManager : NetworkBehaviour
 {
@@ -34,6 +36,18 @@ public class DrawGameManager : NetworkBehaviour
     [Header("UI References - Guessing")]
     [SerializeField] private GameObject guessInputGroup;
 
+    [Header("Localization")]
+    [SerializeField] private LocalizedString timerMessage;
+    [SerializeField] private LocalizedString drawerWordMessage;
+    [SerializeField] private LocalizedString guesserInstructionMessage;
+    [SerializeField] private LocalizedString correctAnswerMessage;
+    [SerializeField] private LocalizedString wrongAnswerMessage;
+    [SerializeField] private LocalizedString timeExpiredMessage;
+    [SerializeField] private LocalizedString roundMessage;
+    [SerializeField] private LocalizedString scoreMessage;
+    [SerializeField] private LocalizedString winnerMessage;
+    [SerializeField] private LocalizedString drawMessage;
+
     [Header("Word Bank")]
     [SerializeField] private List<string> wordsList = new List<string>
     {
@@ -57,8 +71,10 @@ public class DrawGameManager : NetworkBehaviour
     private NetworkVariable<ulong> currentDrawerClientId = new NetworkVariable<ulong>(
         999, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    private NetworkVariable<FixedString128Bytes> resultMessage = new NetworkVariable<FixedString128Bytes>(
-        "", NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    // 0 = no message, 1 = correct answer, 2 = time expired.
+    // Each client resolves the code using its currently selected locale.
+    private NetworkVariable<int> resultMessageCode = new NetworkVariable<int>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     // نظام النقاط
     private NetworkVariable<int> hostScore = new NetworkVariable<int>(
@@ -73,6 +89,11 @@ public class DrawGameManager : NetworkBehaviour
     private bool gameActive = false;
     private Coroutine hideNotificationCoroutine;
     private Coroutine nextRoundCoroutine;
+
+    private string finalHostName;
+    private string finalClientName;
+    private int finalHostScore;
+    private int finalClientScore;
 
     public override void OnNetworkSpawn()
     {
@@ -96,29 +117,8 @@ public class DrawGameManager : NetworkBehaviour
         RegisterPlayerNameServerRpc(PlayerDataHolder.LocalPlayerName);
 
         // مراقبة التغيرات
-        timeRemaining.OnValueChanged += (o, n) =>
-        {
-            if (timerText != null) timerText.text = $"التوقيت: ({Mathf.CeilToInt(n)}s)";
-        };
-
-        resultMessage.OnValueChanged += (o, n) =>
-        {
-            if (resultNotificationText != null)
-            {
-                string msg = n.ToString();
-                if (string.IsNullOrEmpty(msg))
-                {
-                    resultNotificationText.text = "";
-                    resultNotificationText.gameObject.SetActive(false);
-                }
-                else
-                {
-                    resultNotificationText.text = msg;
-                    resultNotificationText.color = msg.Contains("صحيحة") ? Color.green : new Color(1f, 0.5f, 0f);
-                    resultNotificationText.gameObject.SetActive(true);
-                }
-            }
-        };
+        timeRemaining.OnValueChanged += OnTimeRemainingChanged;
+        resultMessageCode.OnValueChanged += OnResultMessageCodeChanged;
 
         hostScore.OnValueChanged += (o, n) => UpdateScoreUI();
         clientScore.OnValueChanged += (o, n) => UpdateScoreUI();
@@ -129,6 +129,10 @@ public class DrawGameManager : NetworkBehaviour
         currentDrawerClientId.OnValueChanged += (o, n) => UpdatePlayerRoleUI();
         currentSecretWord.OnValueChanged += (o, n) => UpdatePlayerRoleUI();
 
+        LocalizationSettings.SelectedLocaleChanged += OnLocaleChanged;
+
+        UpdateTimerUI();
+        UpdateResultNotificationUI();
         UpdatePlayerRoleUI();
         UpdateScoreUI();
 
@@ -140,10 +144,84 @@ public class DrawGameManager : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        timeRemaining.OnValueChanged -= OnTimeRemainingChanged;
+        resultMessageCode.OnValueChanged -= OnResultMessageCodeChanged;
+        LocalizationSettings.SelectedLocaleChanged -= OnLocaleChanged;
+
         if (IsServer && NetworkManager.Singleton != null && NetworkManager.Singleton.SceneManager != null)
         {
             NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= OnSceneLoadCompleted;
         }
+    }
+
+    private string GetLocalizedText(LocalizedString message, params object[] arguments)
+    {
+        if (message == null)
+            return string.Empty;
+
+        return message.GetLocalizedString(arguments);
+    }
+
+    private void OnLocaleChanged(UnityEngine.Localization.Locale locale)
+    {
+        UpdateTimerUI();
+        UpdateResultNotificationUI();
+        UpdateScoreUI();
+        UpdatePlayerRoleUI();
+
+        if (gameOverPanel != null && gameOverPanel.activeSelf)
+            UpdateFinalWinnerUI();
+    }
+
+    private void OnTimeRemainingChanged(float previousValue, float newValue)
+    {
+        UpdateTimerUI();
+    }
+
+    private void OnResultMessageCodeChanged(int previousValue, int newValue)
+    {
+        UpdateResultNotificationUI();
+    }
+
+    private void UpdateTimerUI()
+    {
+        if (timerText == null)
+            return;
+
+        int seconds = Mathf.CeilToInt(timeRemaining.Value);
+        timerText.text = GetLocalizedText(timerMessage, seconds);
+    }
+
+    private void UpdateResultNotificationUI()
+    {
+        if (resultNotificationText == null)
+            return;
+
+        if (resultMessageCode.Value == 0)
+        {
+            resultNotificationText.text = string.Empty;
+            resultNotificationText.gameObject.SetActive(false);
+            return;
+        }
+
+        if (resultMessageCode.Value == 1)
+        {
+            resultNotificationText.text = GetLocalizedText(
+                correctAnswerMessage,
+                currentSecretWord.Value.ToString()
+            );
+            resultNotificationText.color = Color.green;
+        }
+        else if (resultMessageCode.Value == 2)
+        {
+            resultNotificationText.text = GetLocalizedText(
+                timeExpiredMessage,
+                currentSecretWord.Value.ToString()
+            );
+            resultNotificationText.color = new Color(1f, 0.5f, 0f);
+        }
+
+        resultNotificationText.gameObject.SetActive(true);
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -198,7 +276,7 @@ public class DrawGameManager : NetworkBehaviour
             if (senderId == hostId) hostScore.Value += 1;
             else clientScore.Value += 1;
 
-            resultMessage.Value = $"إجابة صحيحة! الكلمة هي: {currentSecretWord.Value}";
+            resultMessageCode.Value = 1;
             
             // تشغيل صوت النجاح للجميع
             PlaySuccessSoundClientRpc();
@@ -221,7 +299,11 @@ public class DrawGameManager : NetworkBehaviour
             {
                 SoundEffectsManager.Instance.PlayWrong();
             }
-            ShowTemporaryNotification("إجابة خاطئة، حاول مجدداً!", Color.red, 1.5f);
+            ShowTemporaryNotification(
+                GetLocalizedText(wrongAnswerMessage),
+                Color.red,
+                1.5f
+            );
         }
     }
 
@@ -261,7 +343,7 @@ public class DrawGameManager : NetworkBehaviour
             return;
         }
 
-        resultMessage.Value = "";
+        resultMessageCode.Value = 0;
         string chosenWord = wordsList[Random.Range(0, wordsList.Count)];
         currentSecretWord.Value = chosenWord;
         timeRemaining.Value = 60f;
@@ -292,7 +374,7 @@ public class DrawGameManager : NetworkBehaviour
                 clientScore.Value += 1;
             }
 
-            resultMessage.Value = $"انتهى الوقت! الكلمة كانت: {currentSecretWord.Value}";
+            resultMessageCode.Value = 2;
         }
 
         if (nextRoundCoroutine != null) StopCoroutine(nextRoundCoroutine);
@@ -311,13 +393,17 @@ public class DrawGameManager : NetworkBehaviour
     private void ShowGameOverScreen()
     {
         gameActive = false;
-        resultMessage.Value = "";
+        resultMessageCode.Value = 0;
 
-        string summary;
         int p1Score = hostScore.Value;
         int p2Score = clientScore.Value;
         string p1Name = hostPlayerName.Value.ToString();
         string p2Name = clientPlayerName.Value.ToString();
+
+        finalHostScore = p1Score;
+        finalClientScore = p2Score;
+        finalHostName = p1Name;
+        finalClientName = p2Name;
 
         // تسجيل الفوز للجلسة الحالية
         if (p1Score > p2Score)
@@ -329,22 +415,16 @@ public class DrawGameManager : NetworkBehaviour
             SessionScoreManager.AddClientWin();
         }
 
-        // صياغة تفصل النتائج بوضوح تام لمنع انقلاب الأرقام لغوياً في TMP
-        string scoreLine = $"{p1Name} ({p1Score})  -  ({p2Score}) {p2Name}";
-
-        if (p1Score > p2Score)
-            summary = $"الفائز: {p1Name}!\n\n{scoreLine}";
-        else if (p2Score > p1Score)
-            summary = $"الفائز: {p2Name}!\n\n{scoreLine}";
-        else
-            summary = $"تعادل بين الطرفين!\n\n{scoreLine}";
-
-        ShowGameOverClientRpc(summary);
+        ShowGameOverClientRpc(p1Name, p1Score, p2Name, p2Score);
     }
 
     [Rpc(SendTo.ClientsAndHost)]
-    private void ShowGameOverClientRpc(string summary)
+    private void ShowGameOverClientRpc(string p1Name, int p1Score, string p2Name, int p2Score)
     {
+        finalHostName = p1Name;
+        finalHostScore = p1Score;
+        finalClientName = p2Name;
+        finalClientScore = p2Score;
         // 1. مسح خطوط الرسم فوراً وإخفاء اللوحة حتى لا تظهر أمام أو خلف نافذة النهاية
         if (drawingBoard != null)
         {
@@ -372,27 +452,70 @@ public class DrawGameManager : NetworkBehaviour
         if (gameOverPanel != null)
         {
             gameOverPanel.SetActive(true);
-            if (finalWinnerScoreText != null)
-            {
-                finalWinnerScoreText.text = summary;
-            }
+            UpdateFinalWinnerUI();
         }
     }
 
     private void UpdateScoreUI()
     {
         int displayRound = Mathf.Min(currentRound.Value, maxRounds);
-        
+
         if (roundDisplayText != null)
         {
-            roundDisplayText.text = $"الجولة: {displayRound}/{maxRounds}";
+            roundDisplayText.text = GetLocalizedText(
+                roundMessage,
+                displayRound,
+                maxRounds
+            );
         }
 
         if (scoreDisplayText != null)
         {
-            // استخدام أقواس حول النقاط لضمان ثبات الترتيب مهما كانت لغة الواجهة
-            scoreDisplayText.text =
-            $"{hostPlayerName.Value} ({hostScore.Value} - {clientScore.Value}) {clientPlayerName.Value}";
+            scoreDisplayText.text = GetLocalizedText(
+                scoreMessage,
+                hostPlayerName.Value.ToString(),
+                hostScore.Value,
+                clientScore.Value,
+                clientPlayerName.Value.ToString()
+            );
+        }
+    }
+
+    private void UpdateFinalWinnerUI()
+    {
+        if (finalWinnerScoreText == null)
+            return;
+
+        string scoreLine = GetLocalizedText(
+            scoreMessage,
+            finalHostName,
+            finalHostScore,
+            finalClientScore,
+            finalClientName
+        );
+
+        if (finalHostScore > finalClientScore)
+        {
+            finalWinnerScoreText.text = GetLocalizedText(
+                winnerMessage,
+                finalHostName,
+                scoreLine
+            );
+        }
+        else if (finalClientScore > finalHostScore)
+        {
+            finalWinnerScoreText.text = GetLocalizedText(
+                winnerMessage,
+                finalClientName,
+                scoreLine
+            );
+        }
+        else
+        {
+            finalWinnerScoreText.text = GetLocalizedText(
+                drawMessage,
+                scoreLine
+            );
         }
     }
 
@@ -420,15 +543,18 @@ public class DrawGameManager : NetworkBehaviour
             guessInputGroup.SetActive(!isMeDrawer);
         }
 
+        if (wordToDrawText == null)
+            return;
+
         if (isMeDrawer)
         {
-            wordToDrawText.text = $"كلمتك هي: {word}";
+            wordToDrawText.text = GetLocalizedText(drawerWordMessage, word);
             if (guessInputField != null) guessInputField.gameObject.SetActive(false);
             if (submitGuessBtn != null) submitGuessBtn.gameObject.SetActive(false);
         }
         else
         {
-            wordToDrawText.text = "خمّن ماذا يرسم الطرف الآخر...";
+            wordToDrawText.text = GetLocalizedText(guesserInstructionMessage);
             if (guessInputField != null)
             {
                 guessInputField.gameObject.SetActive(true);
